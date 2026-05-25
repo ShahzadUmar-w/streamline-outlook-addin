@@ -7,7 +7,7 @@ export const styles = {
   },
   header: {
     p: 2,
-    bgcolor: "#0072C6",
+    bgcolor: "#000000",
     color: "white",
     display: "flex",
     alignItems: "center",
