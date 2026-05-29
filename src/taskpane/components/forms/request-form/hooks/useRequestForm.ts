@@ -1,7 +1,118 @@
+// import { useMemo, useState } from "react";
+// import { requestForms } from "../data/RequestDefinitions";
+// import { buildRequestEmailHtml } from "../utils/emailBuilder";
+// import { RequestFieldDefinition, RequestType } from "../types/RequestForm.types";
+
+// export const useRequestForm = () => {
+//   const [step, setStep] = useState(1);
+//   const [selectedType, setSelectedType] = useState<RequestType | null>(null);
+//   const [formData, setFormData] = useState<Record<string, any>>({});
+
+//   const currentForm = selectedType ? requestForms[selectedType] : null;
+
+//   const activeFields = useMemo<RequestFieldDefinition[]>(() => {
+//     if (!currentForm) return [];
+//     return currentForm.fields.filter(
+//       (field) => !field.conditional || field.conditional(formData)
+//     );
+//   }, [currentForm, formData]);
+
+//   const handleSelectType = (type: RequestType) => {
+//     setSelectedType(type);
+//     setFormData({});
+//     setStep(2);
+//   };
+
+//   const handleInputChange = (name: string, value: any) => {
+//     setFormData((prev) => ({ ...prev, [name]: value }));
+//   };
+
+//   const handleCheckboxChange = (fieldName: string, option: string) => {
+//     const currentValues = (formData[fieldName] as string[]) || [];
+//     const newValues = currentValues.includes(option)
+//       ? currentValues.filter((value) => value !== option)
+//       : [...currentValues, option];
+
+//     setFormData((prev) => ({ ...prev, [fieldName]: newValues }));
+//   };
+
+//   const isFormValid = useMemo(() => {
+//     return activeFields.every((field) => {
+//       if (!field.required) return true;
+//       const value = formData[field.name];
+//       if (Array.isArray(value)) {
+//         return value.length > 0;
+//       }
+//       return value !== undefined && value !== null && value !== "";
+//     });
+//   }, [activeFields, formData]);
+
+// const generateEmail = async () => {
+//   if (!selectedType) return;
+
+//   const htmlContent = buildRequestEmailHtml(
+//     selectedType,
+//     activeFields,
+//     formData
+//   );
+
+//   try {
+//     // Optional: subject bhi set kar sakty ho
+//     Office.context.mailbox.item.subject.setAsync(
+//       `${selectedType} Request`
+//     );
+
+//     // Whole body me HTML insert karega
+//     Office.context.mailbox.item.body.setAsync(
+//       htmlContent,
+//       {
+//         coercionType: Office.CoercionType.Html,
+//       },
+//       (asyncResult) => {
+//         if (asyncResult.status === Office.AsyncResultStatus.Failed) {
+//           console.error("Body insert failed:", asyncResult.error.message);
+//         } else {
+//           setStep(3);
+//         }
+//       }
+//     );
+//   } catch (error) {
+//     console.error("Error generating email:", error);
+//   }
+// };
+
+//   return {
+//     step,
+//     currentForm,
+//     selectedType,
+//     formData,
+//     activeFields,
+//     isFormValid,
+//     setStep,
+//     handleSelectType,
+//     handleInputChange,
+//     handleCheckboxChange,
+//     generateEmail,
+//   };
+// };
+
+
+
+
 import { useMemo, useState } from "react";
 import { requestForms } from "../data/RequestDefinitions";
 import { buildRequestEmailHtml } from "../utils/emailBuilder";
 import { RequestFieldDefinition, RequestType } from "../types/RequestForm.types";
+
+// 1. Define the Hashtag Map based on client requirements
+const hashtagMap: Record<string, string> = {
+  "General Legal Request": "#generalrequests",
+  "Vendor Contract Request": "#outsidecontract",
+  "Sales Contract Request": "#salescontract",
+  "NDA": "#nda",
+  "Privacy / AI Matters": "#privacy/ai",
+  "Business Development Request": "#bdrequest",
+};
 
 export const useRequestForm = () => {
   const [step, setStep] = useState(1);
@@ -47,39 +158,56 @@ export const useRequestForm = () => {
     });
   }, [activeFields, formData]);
 
-const generateEmail = async () => {
-  if (!selectedType) return;
+  const generateEmail = async () => {
+    if (!selectedType) return;
 
-  const htmlContent = buildRequestEmailHtml(
-    selectedType,
-    activeFields,
-    formData
-  );
-
-  try {
-    // Optional: subject bhi set kar sakty ho
-    Office.context.mailbox.item.subject.setAsync(
-      `${selectedType} Request`
+    // Get the specific hashtag for the selected type
+    const hashtag = hashtagMap[selectedType] || "";
+    
+    // Build the base HTML from your utility
+    let htmlContent = buildRequestEmailHtml(
+      selectedType,
+      activeFields,
+      formData
     );
 
-    // Whole body me HTML insert karega
-    Office.context.mailbox.item.body.setAsync(
-      htmlContent,
-      {
-        coercionType: Office.CoercionType.Html,
-      },
-      (asyncResult) => {
-        if (asyncResult.status === Office.AsyncResultStatus.Failed) {
-          console.error("Body insert failed:", asyncResult.error.message);
-        } else {
-          setStep(3);
+    // 2. Append the hashtag to the end of the email body for Streamline AI intake
+    htmlContent += `<br/><br/><div style="color: #666; font-size: 12px;">${hashtag}</div>`;
+
+    try {
+      // 3. Set the "To" recipient
+      Office.context.mailbox.item.to.setAsync(
+        ["requests-xifin@mail.streamline.ai"],
+        (result) => {
+          if (result.status === Office.AsyncResultStatus.Failed) {
+            console.error("Failed to set recipient:", result.error.message);
+          }
         }
-      }
-    );
-  } catch (error) {
-    console.error("Error generating email:", error);
-  }
-};
+      );
+
+      // 4. Set the Subject
+      Office.context.mailbox.item.subject.setAsync(
+        `${selectedType} Request`
+      );
+
+      // 5. Insert the HTML Body
+      Office.context.mailbox.item.body.setAsync(
+        htmlContent,
+        {
+          coercionType: Office.CoercionType.Html,
+        },
+        (asyncResult) => {
+          if (asyncResult.status === Office.AsyncResultStatus.Failed) {
+            console.error("Body insert failed:", asyncResult.error.message);
+          } else {
+            setStep(3);
+          }
+        }
+      );
+    } catch (error) {
+      console.error("Error generating email:", error);
+    }
+  };
 
   return {
     step,
